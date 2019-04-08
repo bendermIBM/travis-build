@@ -112,7 +112,7 @@ module Travis
           sh.raw "travis_rel=$(sw_vers -productVersion)"
           sh.raw "travis_rel_version=${travis_rel%*.*}"
         end
-        "archive_url=https://s3.amazonaws.com/#{bucket}/binaries/${travis_host_os}/${travis_rel_version}/$(uname -m)/#{file_name}"
+        "archive_url=10.100.0.7/travis_content/${travis_host_os}/${travis_rel_version}/$(uname -m)/#{file_name}"
       end
 
       def debug_build_via_api?
