@@ -9,7 +9,7 @@ module Travis
         }
 
         CONFIG = %w(
-          rvm_remote_server_url3=10.100.0.7/travis_content/ubuntu/16.04/s390x
+          rvm_remote_server_url3=http://10.100.0.7/travis_content
           rvm_remote_server_type3=rubies
           rvm_remote_server_verify_downloads3=1
         )
