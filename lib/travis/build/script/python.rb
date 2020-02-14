@@ -3,9 +3,18 @@ module Travis
     class Script
       class Python < Script
         DEFAULTS = {
-          python: '2.7',
+          python: '3.6',
           virtualenv: { system_site_packages: false }
         }
+
+        DEPRECATIONS = [
+          {
+            name: 'Python',
+            current_default: DEFAULTS[:python],
+            new_default: '3.6',
+            cutoff_date: '2019-04-16',
+          }
+        ]
 
         REQUIREMENTS_MISSING = 'Could not locate requirements.txt. Override the install: key in your .travis.yml to install dependencies.'
         SCRIPT_MISSING       = 'Please override the script: key in your .travis.yml to run tests.'
@@ -110,7 +119,7 @@ module Travis
             sh.echo "Downloading archive: ${archive_url}", ansi: :yellow
             archive_basename = [lang, vers].compact.join("-")
             archive_filename = "#{archive_basename}.tar.bz2"
-            sh.cmd "curl -sSf -o #{archive_filename} ${archive_url}", echo: true, assert: false, timing: true
+            sh.cmd "curl -sSf --retry 5 -o #{archive_filename} ${archive_url}", echo: true, assert: false, timing: true
             sh.if "$? != 0" do
               sh.failure "Unable to download #{version} archive. The archive may not exist. Please consider a different version."
             end

@@ -12,11 +12,12 @@ module Travis
       DEFAULTS = { }
 
       DEFAULT_CACHES = {
-        bundler:   false,
-        cocoapods: false,
-        composer:  false,
-        ccache:    false,
-        pip:       false
+        bundler:      false,
+        cocoapods:    false,
+        composer:     false,
+        ccache:       false,
+        pip:          false,
+        npm:          true
       }
 
       attr_reader :data, :language_default_p
@@ -62,6 +63,10 @@ module Travis
 
       def cache_options
         data[:cache_settings] || data[:cache_options] || {}
+      end
+
+      def workspace
+        data[:workspace] || cache_options
       end
 
       def cache(input = config[:cache])
@@ -133,9 +138,9 @@ module Travis
       end
 
       def source_ssh?
+        return false if prefer_https?
         repo_private? && !installation? or
-        repo_private? && custom_ssh_key? or
-        prefer_https?
+          repo_private? && custom_ssh_key?
       end
 
       def source_host
@@ -155,7 +160,7 @@ module Travis
       end
 
       def github_id
-        repository.fetch(:github_id)
+        repository[:vcs_id] || repository.fetch(:github_id)
       end
 
       def repo_private?
@@ -216,6 +221,10 @@ module Travis
 
       def installation_token
         GithubApps.new(installation_id).access_token
+      end
+
+      def workspaces
+        config[:workspaces]
       end
     end
   end

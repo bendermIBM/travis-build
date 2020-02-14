@@ -66,6 +66,9 @@ module Travis
           end
 
           def clone_or_fetch
+            if autocrlf_key_given?
+              sh.cmd "git config --global core.autocrlf #{config[:git][:autocrlf].to_s}"
+            end
             sh.if "! -d #{dir}/.git" do
               if sparse_checkout
                 sh.echo "Cloning with sparse checkout specified with #{sparse_checkout}", ansi: :yellow
@@ -74,12 +77,10 @@ module Travis
                 sh.cmd "echo #{sparse_checkout} >> #{dir}/.git/info/sparse-checkout", assert: true, retry: true
                 sh.cmd "git -C #{dir} remote add origin #{data.source_url}", assert: true, retry: true
                 sh.cmd "git -C #{dir} pull origin #{branch} #{pull_args}", assert: false, retry: true
-                warn_github_status
                 sh.cmd "cat #{dir}/#{sparse_checkout} >> #{dir}/.git/info/sparse-checkout", assert: true, retry: true
                 sh.cmd "git -C #{dir} reset --hard", assert: true, timing: false
               else
                 git_clone
-                warn_github_status
               end
             end
             sh.else do
@@ -97,13 +98,21 @@ module Travis
           end
 
           def checkout
+            return fetch_head_alternative if vcs_pull_request?
             sh.cmd "git checkout -qf #{checkout_ref}", timing: false
           end
 
           def checkout_ref
             return 'FETCH_HEAD' if data.pull_request
-            return data.tag     if data.tag
+            return tag if data.tag
             data.commit
+          end
+
+          def fetch_head_alternative
+            sh.cmd "#{git_cmd} fetch -q #{data.source_url}/branch/#{pull_request_head_branch}", timing: false
+            sh.cmd "#{git_cmd} checkout -q FETCH_HEAD", timing: false
+            sh.cmd "#{git_cmd} checkout -qb #{pull_request_head_branch}", timing: false
+            sh.cmd "#{git_cmd} merge --squash #{branch}", timing: false
           end
 
           def clone_args
@@ -133,8 +142,16 @@ module Travis
             end
           end
 
+          def autocrlf_key_given?
+            config[:git].key?(:autocrlf)
+          end
+
           def branch
             data.branch.shellescape if data.branch
+          end
+
+          def pull_request_head_branch
+            data.job[:pull_request_head_branch].shellescape if data.job[:pull_request_head_branch]
           end
 
           def tag
@@ -161,20 +178,8 @@ module Travis
             data.config
           end
 
-          def warn_github_status
-            return unless github?
-
-            sh.if "$? -ne 0" do
-              sh.echo "Failed to clone from GitHub.", ansi: :red
-              sh.echo "Checking GitHub status (https://status.github.com/api/last-message.json):"
-              sh.raw "curl -sL https://status.github.com/api/last-message.json | jq -r .[]"
-              sh.raw "travis_terminate 1"
-            end
-          end
-
-          def github?
-            host = data.source_host.to_s.downcase
-            host == 'github.com' || host.end_with?('.github.com')
+          def vcs_pull_request?
+            data.repository[:vcs_type].to_s != '' && data.repository[:vcs_type].to_s != 'GithubRepository' && data.pull_request
           end
       end
     end

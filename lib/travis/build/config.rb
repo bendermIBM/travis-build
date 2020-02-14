@@ -48,18 +48,21 @@ module Travis
           precise: ENV.fetch('TRAVIS_BUILD_APT_PACKAGE_SAFELIST_PRECISE', ''),
           trusty: ENV.fetch('TRAVIS_BUILD_APT_PACKAGE_SAFELIST_TRUSTY', ''),
           xenial: ENV.fetch('TRAVIS_BUILD_APT_PACKAGE_SAFELIST_XENIAL', ''),
+          bionic: ENV.fetch('TRAVIS_BUILD_APT_PACKAGE_SAFELIST_BIONIC', ''),
         },
         apt_proxy: ENV.fetch('TRAVIS_BUILD_APT_PROXY', ''),
-        apt_source_safelist: {
-          precise: ENV.fetch('TRAVIS_BUILD_APT_SOURCE_SAFELIST_PRECISE', ''),
-          trusty: ENV.fetch('TRAVIS_BUILD_APT_SOURCE_SAFELIST_TRUSTY', ''),
-          xenial: ENV.fetch('TRAVIS_BUILD_APT_SOURCE_SAFELIST_XENIAL', ''),
+        apt_source_alias_list: {
+          precise: ENV.fetch('TRAVIS_BUILD_APT_SOURCE_ALIAS_LIST_PRECISE', ''),
+          trusty: ENV.fetch('TRAVIS_BUILD_APT_SOURCE_ALIAS_LIST_TRUSTY', ''),
+          xenial: ENV.fetch('TRAVIS_BUILD_APT_SOURCE_ALIAS_LIST_XENIAL', ''),
+          bionic: ENV.fetch('TRAVIS_BUILD_APT_SOURCE_ALIAS_LIST_BIONIC', ''),
         },
-        apt_source_safelist_key_url_template: ENV.fetch(
-          'TRAVIS_BUILD_APT_SOURCE_SAFELIST_KEY_URL_TEMPLATE',
+        apt_source_alias_list_key_url_template: ENV.fetch(
+          'TRAVIS_BUILD_APT_SOURCE_ALIAS_LIST_KEY_URL_TEMPLATE',
           'https://%{app_host}/files/gpg/%{source_alias}.asc'
         ),
         apt_safelist_skip: ENV.fetch('TRAVIS_BUILD_APT_SAFELIST_SKIP', '').to_bool,
+        apt_load_source_alias_list: ENV.fetch('TRAVIS_BUILD_APT_LOAD_SOURCE_ALIAS_LIST', 'true').to_bool,
         auth_disabled: ENV.fetch('TRAVIS_BUILD_AUTH_DISABLED', '').to_bool,
         cabal_default: ENV.fetch('TRAVIS_BUILD_CABAL_DEFAULT', '2.0'),
         enable_debug_tools: ENV.fetch(
@@ -96,6 +99,7 @@ module Travis
             'TRAVIS_BUILD_LIBRATO_TOKEN', ENV.fetch('LIBRATO_TOKEN', '')
           ),
         },
+        maven_central_mirror: ENV.fetch('TRAVIS_MAVEN_CENTRAL_MIRROR', ''),
         network: {
           wait_retries: Integer(ENV.fetch(
             'TRAVIS_BUILD_NETWORK_WAIT_RETRIES',
@@ -109,6 +113,7 @@ module Travis
             )
           ).split(',').map { |s| URI.unescape(s.strip) }
         },
+        redis: { url: 'redis://localhost:6379' },
         sentry_dsn: ENV.fetch(
           'TRAVIS_BUILD_SENTRY_DSN', ENV.fetch('SENTRY_DSN', '')
         ),
@@ -125,7 +130,10 @@ module Travis
           %w(
             bash
             csharp
+            generic
             go
+            julia
+            minimal
             node_js
             powershell
             rust
@@ -136,7 +144,8 @@ module Travis
         ).split(/,/),
         dump_backtrace: ENV.fetch(
           'TRAVIS_BUILD_DUMP_BACKTRACE', ENV.fetch('DUMP_BACKTRACE', 'false')
-        ).to_bool
+        ).to_bool,
+        wait_for_network_check: ENV.fetch('TRAVIS_WAIT_FOR_NETWORK_CHECK', 'true').to_bool
       )
 
       default(

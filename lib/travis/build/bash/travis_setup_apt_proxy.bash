@@ -13,7 +13,7 @@ travis_setup_apt_proxy() {
     return
   fi
 
-  if ! curl --connect-timeout 5 -fsSL -o /dev/null \
+  if ! curl --connect-timeout 1 -fsSL -o /dev/null \
     "${TRAVIS_APT_PROXY}/__squignix_health__" &>/dev/null; then
     return
   fi
@@ -26,6 +26,8 @@ Acquire::http::Proxy::download.oracle.com "DIRECT";
 Acquire::https::Proxy::download.oracle.com "DIRECT";
 Acquire::http::Proxy::*.java.net "DIRECT";
 Acquire::https::Proxy::*.java.net "DIRECT";
+Acquire::http::Proxy::apt.postgresql.org "DIRECT";
+Acquire::https::Proxy::apt.postgresql.org "DIRECT";
 EOCONF
   ) | sudo tee "${dest_dir}/99-travis-apt-proxy" &>/dev/null
 }

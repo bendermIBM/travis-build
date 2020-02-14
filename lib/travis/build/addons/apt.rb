@@ -13,15 +13,18 @@ module Travis
           precise
           trusty
           xenial
+          bionic
         ).freeze
+
+        attr_reader :safelisted, :disallowed_while_sudo
 
         class << self
           def package_safelists
             @package_safelists ||= load_package_safelists
           end
 
-          def source_safelists
-            @source_safelists ||= load_source_safelists
+          def source_alias_lists
+            @source_alias_lists ||= load_source_alias_lists
           end
 
           private
@@ -39,11 +42,11 @@ module Travis
             loaded
           end
 
-          def load_source_safelists(dists = SUPPORTED_DISTS)
+          def load_source_alias_lists(dists = SUPPORTED_DISTS)
             require 'faraday'
             loaded = { unset: {} }.merge(Hash[dists.map { |dist| [dist.to_sym, {}] }])
             dists.each do |dist|
-              response = fetch_source_safelist(dist)
+              response = fetch_source_alias_list(dist)
               entries = JSON.parse(response)
               loaded[dist.to_sym] = Hash[entries.reject { |e| !e.key?('alias') }.map { |e| [e.fetch('alias'), e] }]
             end
@@ -57,16 +60,16 @@ module Travis
             Faraday.get(package_safelist_url(dist)).body.to_s
           end
 
-          def fetch_source_safelist(dist)
-            Faraday.get(source_safelist_url(dist)).body.to_s
+          def fetch_source_alias_list(dist)
+            Faraday.get(source_alias_list_url(dist)).body.to_s
           end
 
           def package_safelist_url(dist)
             Travis::Build.config.apt_package_safelist[dist.downcase].to_s
           end
 
-          def source_safelist_url(dist)
-            Travis::Build.config.apt_source_safelist[dist.downcase].to_s
+          def source_alias_list_url(dist)
+            Travis::Build.config.apt_source_alias_list[dist.downcase].to_s
           end
         end
 
@@ -79,12 +82,19 @@ module Travis
         def before_prepare
           sh.fold('apt') do
             add_apt_sources unless config_sources.empty?
+            if config[:update] || !config_sources.empty? || !config_packages.empty?
+              sh.cmd 'travis_apt_get_update', retry: true, echo: true, timing: true
+            end
             add_apt_packages unless config_packages.empty?
           end
         end
 
         def skip_safelist?
           Travis::Build.config.apt_safelist_skip?
+        end
+
+        def load_alias_list?
+          Travis::Build.config.apt_load_source_alias_list?
         end
 
         def before_configure?
@@ -107,7 +117,7 @@ module Travis
             sh.cmd "sudo mv #{tmp_dest} ${TRAVIS_ROOT}/etc/apt/apt.conf.d"
           end
         end
-        
+
         def config
           @config ||= Hash(super)
         end
@@ -117,31 +127,28 @@ module Travis
           def add_apt_sources
             sh.echo "Adding APT Sources", ansi: :yellow
 
-            safelisted = []
+            @safelisted = []
             disallowed = []
-            disallowed_while_sudo = []
+            @disallowed_while_sudo = []
 
             config_sources.each do |src|
-              source = source_safelists[config_dist][src]
+              if !load_alias_list?
+                sh.echo "Skipping loading APT source aliases list", ansi: :yellow
+                add_to_safelisted src
+                next
+              end
 
-              if source.respond_to?(:[]) && source['sourceline']
-                safelisted << source.clone
-              elsif !data.disable_sudo? || skip_safelist?
-                if src.respond_to?(:has_key?)
-                  if src.has_key?(:sourceline)
-                    safelisted << {
-                      'sourceline' => src[:sourceline],
-                      'key_url' => src[:key_url]
-                    }
-                  else
-                    sh.echo "'sourceline' key missing:", ansi: :yellow
-                    sh.echo Shellwords.escape(src.inspect)
-                  end
+              if source = source_alias_lists[config_dist][src[:name]]
+                if source.respond_to?(:[]) && source['sourceline']
+                  safelisted << source.clone
                 else
-                  disallowed_while_sudo << src
+                  sh.echo "'sourceline' is missing in the alias #{src[:name]}", ansi: :yellow
+                  sh.echo Shellwords.escape(src[:name].inspect)
                 end
+              elsif !data.disable_sudo? || skip_safelist?
+                add_to_safelisted src
               elsif source.nil?
-                disallowed << src
+                disallowed << src[:name]
               end
             end
 
@@ -170,6 +177,20 @@ module Travis
             end
           end
 
+          def add_to_safelisted(src)
+            if src.has_key?(:sourceline)
+              safelisted << {
+                'sourceline' => src[:sourceline],
+                'key_url' => src[:key_url]
+              }
+            elsif src.keys == [:key_url]
+              sh.echo "'sourceline' key missing:", ansi: :yellow
+              sh.echo Shellwords.escape(src.inspect)
+            else
+              disallowed_while_sudo << src[:name]
+            end
+          end
+
           def add_apt_packages
             sh.echo "Installing APT Packages", ansi: :yellow
 
@@ -187,7 +208,6 @@ module Travis
                 stop_postgresql
               end
 
-              sh.cmd 'travis_apt_get_update', retry: true, echo: true, timing: true
               sh.raw bash('travis_apt_get_options')
               command = 'sudo -E apt-get -yq --no-install-suggests --no-install-recommends ' \
                 "$(travis_apt_get_options) install #{safelisted.join(' ')}"
@@ -206,7 +226,9 @@ module Travis
           end
 
           def config_sources
-            @config_sources ||= Array(config[:sources]).flatten.compact
+            @config_sources ||= Array([config[:sources]]).flatten.compact.map do |src|
+              src.is_a?(String) ? { name: src } : src
+            end
           rescue TypeError => e
             if e.message =~ /no implicit conversion of Symbol into Integer/
               raise Travis::Build::AptSourcesConfigError.new
@@ -233,12 +255,12 @@ module Travis
             ::Travis::Build::Addons::Apt.package_safelists
           end
 
-          def source_safelists
-            ::Travis::Build::Addons::Apt.source_safelists
+          def source_alias_lists
+            ::Travis::Build::Addons::Apt.source_alias_lists
           end
 
           def safelisted_source_key_url(source)
-            tmpl = Travis::Build.config.apt_source_safelist_key_url_template.to_s.output_safe
+            tmpl = Travis::Build.config.apt_source_alias_list_key_url_template.to_s.output_safe
             if source['key_url'] && (!data.disable_sudo? || skip_safelist?)
               tmpl = source['key_url']
             end

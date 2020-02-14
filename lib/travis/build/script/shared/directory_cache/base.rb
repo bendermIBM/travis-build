@@ -9,7 +9,8 @@ module Travis
       module DirectoryCache
         class Base
           MSGS = {
-            config_missing: 'Worker %s config missing: %s'
+            config_missing: 'Worker %s config missing: %s',
+            cache_config_invalid: 'Cache configuration must be a single keyword (e.g., "bundler") or a map (e.g., "{"bundler": true}"). %s',
           }
 
           VALIDATE = {
@@ -55,24 +56,24 @@ module Travis
           CASHER_URL = 'https://raw.githubusercontent.com/travis-ci/casher/%s/bin/casher'
           BIN_PATH   = '$CASHER_DIR/bin/casher'
 
-          attr_reader :sh, :data, :slug, :start, :msgs
-          attr_accessor :signer
+          attr_reader :sh, :data, :slug, :start, :msgs, :archive_type
 
-          def initialize(sh, data, slug, start = Time.now)
+          def initialize(sh, data, slug, start = Time.now, archive_type = 'cache')
             @sh = sh
             @data = data
             @slug = slug
             @start = start
             @msgs = []
+            @archive_type = archive_type
           end
 
           def valid?
-            validate
+            validate_backend_config
             msgs.empty?
           end
 
           def signature(verb, path, options)
-            @signer = case data_store_options.fetch(:aws_signature_version, DEFAULT_AWS_SIGNATURE_VERSION).to_s
+            case aws_signature_version
             when '2'
               Signatures::AWS2Signature.new(
                 key: key_pair,
@@ -132,18 +133,30 @@ module Travis
 
           def fetch_urls
             urls = [
+              fetch_url(uri_normalize_name(group), true, true),
+              fetch_url(uri_normalize_name(group), false, true),
+              fetch_url(normalize_name(group), true, true),
+              fetch_url(normalize_name(group), false, true),
               fetch_url(uri_normalize_name(group), true),
               fetch_url(uri_normalize_name(group)),
               fetch_url(normalize_name(group), true),
               fetch_url(normalize_name(group))
             ]
             if data.pull_request
+              urls << fetch_url(uri_normalize_name(data.branch), true, true)
+              urls << fetch_url(uri_normalize_name(data.branch), false, true)
+              urls << fetch_url(normalize_name(data.branch), true, true)
+              urls << fetch_url(normalize_name(data.branch), false, true)
               urls << fetch_url(uri_normalize_name(data.branch), true)
               urls << fetch_url(uri_normalize_name(data.branch))
               urls << fetch_url(normalize_name(data.branch), true)
               urls << fetch_url(normalize_name(data.branch))
             end
-            if data.branch != data.repository[:default_branch]
+            if data.repository[:default_branch] && data.branch != data.repository[:default_branch]
+              urls << fetch_url(uri_normalize_name(data.repository[:default_branch]), true, true)
+              urls << fetch_url(uri_normalize_name(data.repository[:default_branch]), false, true)
+              urls << fetch_url(normalize_name(data.repository[:default_branch]), true, true)
+              urls << fetch_url(normalize_name(data.repository[:default_branch]), false, true)
               urls << fetch_url(uri_normalize_name(data.repository[:default_branch]), true)
               urls << fetch_url(uri_normalize_name(data.repository[:default_branch]))
               urls << fetch_url(normalize_name(data.repository[:default_branch]), true)
@@ -157,15 +170,15 @@ module Travis
             run('push', Shellwords.escape(push_url.to_s), assert: false, timing: true)
           end
 
-          def fetch_url(branch = group, extras = false)
-            prefix = prefixed(branch, extras)
+          def fetch_url(branch = group, extras = false, arch = false)
+            prefix = prefixed(branch, extras, arch)
             if prefix
               url('GET', prefix, expires: fetch_timeout)
             end
           end
 
           def push_url(branch = group)
-            prefix = prefixed(uri_normalize_name(branch), true)
+            prefix = prefixed(uri_normalize_name(branch), true, true)
             if prefix
               url('PUT', prefix, expires: push_timeout)
             end
@@ -186,20 +199,27 @@ module Travis
               raise "#{__method__} must be overridden"
             end
 
-            def validate
+            def validate_backend_config
               VALIDATE.each { |key, msg| msgs << msg unless data_store_options[key] }
               sh.echo MSGS[:config_missing] % [ self.class.name.split('::').last.upcase, msgs.join(', ')], ansi: :red unless msgs.empty?
             end
 
+            def validate_user_config
+              unless data.cache.is_a?(String) || data.cache.is_a?(Hash)
+                sh.echo MSGS[:cache_config_invalid] % [ data.cache ], ansi: :red
+              end
+            end
+
             def run(command, args, options = {})
+              cache_name = URI.encode_www_form_component(slug)
               sh.with_errexit_off do
                 sh.if "-f #{BIN_PATH}" do
                   sh.if "-e ~/.rvm/scripts/rvm" do
                     sh.cmd('type rvm &>/dev/null || source ~/.rvm/scripts/rvm', echo: false, assert: false)
-                    sh.cmd "rvm $(travis_internal_ruby) --fuzzy do #{BIN_PATH} #{command} #{Array(args).join(' ')}", options.merge(echo: false, assert: false)
+                    sh.cmd "rvm $(travis_internal_ruby) --fuzzy do #{BIN_PATH} --name #{cache_name} #{archive_type} #{command} #{Array(args).join(' ')}", options.merge(echo: false, assert: false)
                   end
                   sh.else do
-                    sh.cmd "#{BIN_PATH} #{command} #{Array(args).join(' ')}", options.merge(echo: false, assert: false)
+                    sh.cmd "#{BIN_PATH} --name #{cache_name} #{archive_type} #{command} #{Array(args).join(' ')}", options.merge(echo: false, assert: false)
                   end
                 end
               end
@@ -233,13 +253,19 @@ module Travis
               )
             end
 
-            def prefixed(branch, extras = false)
+            def prefixed(branch, extras = false, arch = false)
               slug_local = slug.dup
               if ! extras
                 slug_local = slug.gsub(/^cache(.+?)(?=--)/,'cache')
               end
+              if arch
+                # injecting the job's `arch` value into `Script#cache_slug` is
+                # logically more natural, but doing so will require some serious
+                # code reorganization
+                slug_local = slug.gsub(/^cache/, "cache-#{data.config[:arch]}")
+              end
 
-              case data_store_options.fetch(:aws_signature_version, DEFAULT_AWS_SIGNATURE_VERSION).to_s
+              case aws_signature_version
               when '2'
                 args = [data.github_id, branch, slug_local].compact
               else
@@ -277,11 +303,15 @@ module Travis
             end
 
             def casher_branch
-              if branch = data.cache[:branch]
-                branch
+              if defined_branch
+                defined_branch
               else
-                edge? ? 'master' : 'production'
+                edge? ? 'master' : 'bash'
               end
+            end
+
+            def defined_branch
+              data.cache[:branch]
             end
 
             def edge?
@@ -299,7 +329,7 @@ module Travis
             def update_static_file(name, location, remote_location, assert = false)
               flags = "-sf #{debug_flags}"
               cmd_opts = {retry: true, assert: false, echo: 'Installing caching utilities'}
-              if casher_branch == 'production'
+              if casher_branch == 'bash'
                 static_file_location = "https://#{app_host}/files/#{name}".output_safe
                 sh.cmd curl_cmd(flags, location, static_file_location), cmd_opts
                 sh.if "$? -ne 0" do
@@ -307,6 +337,7 @@ module Travis
                   sh.cmd curl_cmd(flags, location, remote_location), cmd_opts
                 end
               else
+                sh.echo "Using #{defined_branch} casher", ansi: :yellow if defined_branch
                 sh.cmd curl_cmd(flags, location, (CASHER_URL % casher_branch)), cmd_opts
               end
             end
@@ -321,6 +352,10 @@ module Travis
 
             def uri_normalize_name(branch)
               URI.encode(branch)
+            end
+
+            def aws_signature_version
+              data_store_options.fetch(:aws_signature_version, DEFAULT_AWS_SIGNATURE_VERSION).to_s
             end
 
         end

@@ -14,6 +14,7 @@ module Travis
           quiet: false,
           lfs_skip_smudge: false,
           sparse_checkout: false,
+          clone: true
         }
       }
 
@@ -26,6 +27,7 @@ module Travis
 
       def checkout
         disable_interactive_auth
+        enable_longpaths if config[:os] == 'windows'
         install_ssh_key if install_ssh_key?
         write_netrc if write_netrc?
         sh.newline
@@ -42,6 +44,10 @@ module Travis
 
         def disable_interactive_auth
           sh.export 'GIT_ASKPASS', 'echo', :echo => false
+        end
+
+        def enable_longpaths
+          sh.cmd 'git config --system core.longpaths true', echo: false
         end
 
         def install_ssh_key?
@@ -65,7 +71,11 @@ module Travis
         end
 
         def clone_or_fetch
-          Clone.new(sh, data).apply
+          if clone?
+            Clone.new(sh, data).apply
+          else
+            sh.echo 'Skipping \`git clone\` based on given configuration', ansi: :yellow
+          end
         end
 
         def submodules
@@ -83,6 +93,11 @@ module Travis
         def use_tarball?
           config[:git][:strategy] == 'tarball'
         end
+
+        def clone?
+          config[:git][:clone]
+        end
+
 
         def dir
           data.slug

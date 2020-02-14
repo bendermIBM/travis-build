@@ -29,8 +29,29 @@ travis_setup_env() {
   msys*)
     export TRAVIS_OS_NAME=windows
     ;;
+  freebsd*)
+    export TRAVIS_OS_NAME=freebsd
+    ;;
   *)
     export TRAVIS_OS_NAME=notset
+    ;;
+  esac
+
+  case $(uname -m) in
+  x86_64*)
+    export TRAVIS_CPU_ARCH=amd64
+    ;;
+  aarch64*)
+    export TRAVIS_CPU_ARCH=arm64
+    ;;
+  ppc64le*)
+    export TRAVIS_CPU_ARCH=ppc64le
+    ;;
+  s390x*)
+    export TRAVIS_CPU_ARCH=s390x
+    ;;
+  *)
+    export TRAVIS_CPU_ARCH=notset
     ;;
   esac
 

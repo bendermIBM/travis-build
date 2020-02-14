@@ -35,7 +35,7 @@ describe Travis::Build::RakeTasks do
       end
 
       [
-        ['tmate-io/tmate', 'tmate-v1.2.5-static-linux-amd64.tar.gz'],
+        ['tmate-io/tmate', 'tmate-v1.2.5-static-linux-amd64.tar.xz'],
         ['tools/godep', 'godep_darwin_amd64'],
         ['tools/godep', 'godep_linux_amd64']
       ].each do |repo_slug, file_basename|
@@ -51,7 +51,7 @@ describe Travis::Build::RakeTasks do
         /paulp/sbt-extras/master/sbt
         /sc-linux.tar.gz
         /sc-osx.zip
-        /travis-ci/casher/production/bin/casher
+        /travis-ci/casher/bash/bin/casher
         /travis-ci/gimme/v1.2.5/gimme
       ].each do |filepath|
         stub.get(filepath) do |*|
@@ -178,7 +178,7 @@ describe Travis::Build::RakeTasks do
     public/files/sbt
     public/files/sc-linux.tar.gz
     public/files/sc-osx.zip
-    public/files/tmate-static-linux-amd64.tar.gz
+    public/files/tmate-static-linux-amd64.tar.xz
     public/version-aliases/ghc.json
   ].each do |filename|
     it "can fetch #{filename}" do

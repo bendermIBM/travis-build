@@ -35,6 +35,7 @@ module Travis
             sh.cmd "sudo mkdir -p -m 0755 /nix/"
             sh.cmd "sudo chown $USER /nix/"
             # Set nix config dir and make config Hydra compatible
+            sh.cmd "sudo mkdir -p -m 0755 /etc/nix"
             sh.cmd "echo 'build-max-jobs = 4' | sudo tee /etc/nix/nix.conf > /dev/null"
           end
         end
@@ -62,7 +63,7 @@ module Travis
           super
 
           sh.echo 'Nix support for Travis CI is community maintained.', ansi: :green
-          sh.echo 'Please open any issues at https://github.com/travis-ci/travis-ci/issues/new and cc @domenkozar @garbas @matthewbauer @grahamc', ansi: :green
+          sh.echo 'Please open any issues at https://travis-ci.community/c/languages/nix and cc @domenkozar @garbas @matthewbauer @grahamc', ansi: :green
 
           sh.cmd "nix-env --version"
           sh.cmd "nix-instantiate --eval -E 'with import <nixpkgs> {}; lib.version or lib.nixpkgsVersion'"

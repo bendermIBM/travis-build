@@ -1,5 +1,5 @@
 travis_cmd() {
-  local assert output display retry timing cmd result secure
+  local assert output display retry timing cmd result secure event
 
   cmd="${1}"
   export TRAVIS_CMD="${cmd}"
@@ -27,6 +27,10 @@ travis_cmd() {
       timing=true
       shift
       ;;
+    --event)
+      event="${2}"
+      shift 2
+      ;;
     --secure)
       secure=" 2>/dev/null"
       shift
@@ -36,7 +40,7 @@ travis_cmd() {
   done
 
   if [[ -n "${timing}" ]]; then
-    travis_time_start
+    travis_time_start "${event}"
   fi
 
   if [[ -n "${output}" ]]; then
@@ -54,14 +58,14 @@ travis_cmd() {
     fi
     result="${?}"
     if [[ -n "${secure}" && "${result}" -ne 0 ]]; then
-      echo -e "${ANSI_RED}The previous command failed, possibly due to a malformed secure environment variable.${ANSI_CLEAR}
-${ANSI_RED}Please be sure to escape special characters such as ' ' and '$'.${ANSI_CLEAR}
-${ANSI_RED}For more information, see https://docs.travis-ci.com/user/encryption-keys.${ANSI_CLEAR}"
+      echo -e "${ANSI_RED}We were unable to parse one of your secure environment variables.${ANSI_CLEAR}
+${ANSI_RED}Please make sure to escape special characters such as ' ' (white space) and $ (dollar symbol) with \\ (backslash) .${ANSI_CLEAR}
+${ANSI_RED}For example, thi\$isanexample would be typed as thi\\\$isanexample. See https://docs.travis-ci.com/user/encryption-keys.${ANSI_CLEAR}"
     fi
   fi
 
   if [[ -n "${timing}" ]]; then
-    travis_time_finish
+    travis_time_finish "${event}"
   fi
 
   if [[ -n "${assert}" ]]; then

@@ -20,6 +20,7 @@ module Travis
         Stage.new(:builtin,     :setup,          :always),
         Stage.new(:builtin,     :setup_casher,   :always),
         Stage.new(:builtin,     :setup_cache,    :always),
+        Stage.new(:builtin,     :use_workspaces, :always),
         Stage.new(:builtin,     :announce,       :always),
         Stage.new(:builtin,     :debug,          :always),
         Stage.new(:custom,      :before_install, false),
@@ -27,6 +28,7 @@ module Travis
         Stage.new(:custom,      :before_script,  false),
         Stage.new(:custom,      :script,         false),
         Stage.new(:custom,      :before_cache,   false),
+        Stage.new(:builtin,     :create_workspaces, false),
         Stage.new(:builtin,     :cache,          false),
         Stage.new(:builtin,     :reset_state,    true),
         Stage.new(:conditional, :after_success,  false),
@@ -42,11 +44,13 @@ module Travis
         announce:       { assert: false, echo: true,  timing: false },
         setup_casher:   { assert: true,  echo: true,  timing: true  },
         setup_cache:    { assert: true,  echo: true,  timing: true  },
+        use_workspaces: { assert: false, echo: true,  timing: true  },
         debug:          { assert: false, echo: true,  timing: true  },
         before_install: { assert: true,  echo: true,  timing: true  },
         install:        { assert: true,  echo: true,  timing: true  },
         before_script:  { assert: true,  echo: true,  timing: true  },
         script:         { assert: false, echo: true,  timing: true  },
+        create_workspaces: { assert: false, echo: true,  timing: true },
         after_success:  { assert: false, echo: true,  timing: true  },
         after_failure:  { assert: false, echo: true,  timing: true  },
         after_script:   { assert: false, echo: true,  timing: true  },
@@ -110,6 +114,7 @@ module Travis
       end
 
       def define_stage(type, name)
+        sh.event = name
         sh.raw "cat <<'EOFUNC_#{name.upcase}' >>${TRAVIS_HOME}/.travis/job_stages"
         sh.raw "function travis_run_#{name}() {"
         commands = run_stage(type, name)

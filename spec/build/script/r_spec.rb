@@ -10,23 +10,19 @@ describe Travis::Build::Script::R, :sexp do
   it_behaves_like 'a build script sexp'
 
   it 'normalizes bioc-devel correctly' do
-    pending('known to fail with certain random seeds (incl 58438)')
-    fail
     data[:config][:r] = 'bioc-devel'
     should include_sexp [:export, ['TRAVIS_R_VERSION', 'devel']]
     should include_sexp [:cmd, %r{install.packages\(\"BiocManager"\)},
                          assert: true, echo: true, timing: true, retry: true]
-    should include_sexp [:cmd, %r{BiocManager::install\(version = \"devel\"\)},
+    should include_sexp [:cmd, %r{BiocManager::install\(version = \"devel\"},
                          assert: true, echo: true, timing: true, retry: true]
   end
 
   it 'normalizes bioc-release correctly' do
-    pending('known to fail with certain random seeds (incl 58438)')
-    fail
     data[:config][:r] = 'bioc-release'
     should include_sexp [:cmd, %r{install.packages\(\"BiocManager"\)},
                          assert: true, echo: true, timing: true, retry: true]
-    should include_sexp [:export, ['TRAVIS_R_VERSION', '3.5.2']]
+    should include_sexp [:export, ['TRAVIS_R_VERSION', '3.6.2']]
   end
 
   it 'r_packages works with a single package set' do
@@ -54,7 +50,7 @@ describe Travis::Build::Script::R, :sexp do
   end
 
   it 'downloads and installs latest R' do
-    should include_sexp [:cmd, %r{^curl.*https://travis-ci\.rstudio\.org/R-3\.5\.2-\$\(lsb_release -cs\)\.xz},
+    should include_sexp [:cmd, %r{^curl.*https://travis-ci\.rstudio\.org/R-3\.6\.2-\$\(lsb_release -cs\)\.xz},
                          assert: true, echo: true, retry: true, timing: true]
   end
 
@@ -79,7 +75,7 @@ describe Travis::Build::Script::R, :sexp do
   it 'downloads and installs R devel on OS X' do
     data[:config][:os] = 'osx'
     data[:config][:r] = 'devel'
-    should include_sexp [:cmd, %r{^curl.*r\.research\.att\.com/el-capitan/R-devel/R-devel-el-capitan-signed\.pkg},
+    should include_sexp [:cmd, %r{^curl.*mac\.r-project\.org/el-capitan/R-devel/R-devel-el-capitan\.pkg},
                          assert: true, echo: true, retry: true, timing: true]
   end
   it 'downloads and installs gfortran libraries on OS X' do
@@ -151,7 +147,16 @@ describe Travis::Build::Script::R, :sexp do
                          assert: true, echo: true, timing: true]
   end
 
-  it 'installs source devtools' do
+  it 'installs source remotes by default' do
+    should include_sexp [:cmd, /Rscript -e 'install\.packages\(c\(\"remotes\"\)/,
+                         assert: true, echo: true, timing: true]
+
+    should_not include_sexp [:cmd, /sudo apt-get install.*r-cran-remotes/,
+                         assert: true, echo: true, timing: true, retry: true]
+  end
+
+  it 'installs source devtools if requested' do
+    data[:config][:use_devtools] = true
     should include_sexp [:cmd, /Rscript -e 'install\.packages\(c\(\"devtools\"\)/,
                          assert: true, echo: true, timing: true]
 
@@ -161,6 +166,7 @@ describe Travis::Build::Script::R, :sexp do
 
   it 'installs source devtools if sudo: false' do
     data[:config][:sudo] = false
+    data[:config][:use_devtools] = true
     should include_sexp [:cmd, /Rscript -e 'install\.packages\(c\(\"devtools\"\)/,
                          assert: true, echo: true, timing: true]
 
@@ -179,6 +185,12 @@ describe Travis::Build::Script::R, :sexp do
     data[:config][:latex] = false
     should include_sexp [:cmd, /.*R CMD check.* --no-manual.*/,
                          echo: true, timing: true]
+  end
+
+  it 'Prints installed package versions' do
+    data[:config][:use_devtools] = true
+    should include_sexp [:cmd, /.*#{Regexp.escape('devtools::session_info(installed.packages()[, "Package"])')}.*/,
+                         assert: true, echo: true, timing: true]
   end
 
   describe 'bioc configuration is optional' do
@@ -223,10 +235,6 @@ describe Travis::Build::Script::R, :sexp do
                            assert: true, echo: true, retry: true, timing: true]
     end
 
-    it 'Prints installed package versions' do
-      should include_sexp [:cmd, /.*#{Regexp.escape('devtools::session_info(installed.packages()[, "Package"])')}.*/,
-                           assert: true, echo: true, timing: true]
-    end
   end
 
   describe '#cache_slug' do
@@ -241,11 +249,11 @@ describe Travis::Build::Script::R, :sexp do
     }
     it {
       data[:config][:r] = 'release'
-      should eq("cache-#{CACHE_SLUG_EXTRAS}--R-3.5.2")
+      should eq("cache-#{CACHE_SLUG_EXTRAS}--R-3.6.2")
     }
     it {
       data[:config][:r] = 'oldrel'
-      should eq("cache-#{CACHE_SLUG_EXTRAS}--R-3.4.4")
+      should eq("cache-#{CACHE_SLUG_EXTRAS}--R-3.5.3")
     }
     it {
       data[:config][:r] = '3.1'
