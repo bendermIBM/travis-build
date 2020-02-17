@@ -17,6 +17,7 @@ WORKDIR /usr/src/app
 
 ENV TRAVIS_BUILD_DUMP_BACKTRACE true
 ENV PORT 4000
+ENV TRAVIS_WAIT_FOR_NETWORK_CHECK false
 
 COPY --from=builder /usr/src/app /usr/src/app
 COPY --from=builder /usr/local/bundle/config /usr/local/bundle/config
