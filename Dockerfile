@@ -12,7 +12,7 @@ RUN bundle exec rake assets:precompile GITHUB_OAUTH_TOKEN=$GITHUB_OAUTH_TOKEN
 RUN tar -cjf public.tar.bz2 public && rm -rf public
 
 FROM ruby:2.5.3-slim
-LABEL maintainer Travis CI GmbH <support+travis-build-docker-images@travis-ci.com>
+LABEL maintainer Max Bender <max.bender1@ibm.com>
 WORKDIR /app
 
 ENV TRAVIS_BUILD_DUMP_BACKTRACE true
