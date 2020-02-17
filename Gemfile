@@ -12,6 +12,7 @@ gem 'metriks', '0.9.9.6'
 gem 'metriks-librato_metrics', git: 'https://github.com/eric/metriks-librato_metrics'
 gem 'puma'
 gem 'rack-ssl', '~> 1.4'
+gem 'rerun', require: false, group: :development
 gem 'sentry-raven'
 gem 'sinatra', '~> 1.4'
 gem 'travis'
