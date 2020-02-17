@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -ev
+
+app_name="web"
+local_image="travisbuild_$app_name" # Docker Compose removes dashes and expects the name to end with the build app name
+
+docker-compose build "$app_name"
+docker images;
+
+docker tag $local_image $local_image:$TRAVIS_BRANCH;
+
+docker tag $local_image $local_image:${TRAVIS_COMMIT:0:7};
+
+exit 0;
